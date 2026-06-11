@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BG Fight Calculator — THAC0 &amp; Damage</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <h1>Baldur's Gate Fight Calculator</h1>
+    <p class="subtitle">Hit chance, average damage per round, and upgrade comparison</p>
+  </header>
+
+  <main class="battlefield">
+    <section class="team-column" id="team-a" data-team="a">
+      <div class="team-header">
+        <h2>Team A</h2>
+        <button type="button" class="btn btn-add" data-action="add" data-team="a">+ Add character</button>
+      </div>
+      <div class="team-members" id="team-a-members"></div>
+      <div class="team-stats" id="team-a-stats"></div>
+    </section>
+
+    <div class="vs-divider" aria-hidden="true">VS</div>
+
+    <section class="team-column" id="team-b" data-team="b">
+      <div class="team-header">
+        <h2>Team B</h2>
+        <button type="button" class="btn btn-add" data-action="add" data-team="b">+ Add character</button>
+      </div>
+      <div class="team-members" id="team-b-members"></div>
+      <div class="team-stats" id="team-b-stats"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+  <p>
+    Hit: roll ≥ THAC0 − AC (natural 1 always misses, natural 20 always hits).
+    Critical hits double the <code>AdB + C</code> portion; <code>D</code> is not doubled.
+    A helmet on the defender prevents bonus critical damage.
+  </p>
+  </footer>
+
+  <script src="combat.js"></script>
+  <script src="monsters.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
