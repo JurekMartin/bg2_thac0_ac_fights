@@ -27,15 +27,30 @@ function expectedWeaponDamage(a, b, c) {
   return expectedDice(a, b) + (Number(c) || 0);
 }
 
+function attackRollHits(roll, threshold) {
+  if (roll === 1) return false;
+  if (roll === 20) return true;
+  return roll >= threshold;
+}
+
 /**
- * Average damage on a successful hit.
+ * Expected damage per attack roll (d20), accounting for which rolls hit
+ * and that only a natural 20 is a critical hit.
  * D is not doubled on critical; helmet negates crit bonus damage.
  */
-function averageDamagePerHit(a, b, c, d, defenderHasHelmet) {
+function expectedDamagePerAttack(thac0, ac, a, b, c, d, defenderHasHelmet) {
   const weapon = expectedWeaponDamage(a, b, c);
   const flat = Number(d) || 0;
-  const critBonus = defenderHasHelmet ? 0 : CRIT_CHANCE * weapon;
-  return weapon + flat + critBonus;
+  const normalDamage = weapon + flat;
+  const critDamage = defenderHasHelmet ? normalDamage : 2 * weapon + flat;
+  const threshold = thac0 - ac;
+  let total = 0;
+  for (let roll = 1; roll <= 20; roll++) {
+    if (!attackRollHits(roll, threshold)) continue;
+    const damage = roll === 20 ? critDamage : normalDamage;
+    total += damage / 20;
+  }
+  return total;
 }
 
 /**
@@ -43,15 +58,20 @@ function averageDamagePerHit(a, b, c, d, defenderHasHelmet) {
  */
 function damagePerRound(attacker, defender) {
   const hitPct = hitProbability(attacker.thac0, defender.ac);
-  const dmgPerHit = averageDamagePerHit(
-    attacker.a, attacker.b, attacker.c, attacker.d,
+  const expectedPerAttack = expectedDamagePerAttack(
+    attacker.thac0,
+    defender.ac,
+    attacker.a,
+    attacker.b,
+    attacker.c,
+    attacker.d,
     defender.helmet
   );
   const apr = Math.max(0, Number(attacker.apr) || 0);
   return {
     hitProbability: hitPct,
-    damagePerHit: dmgPerHit,
-    damagePerRound: apr * hitPct * dmgPerHit,
+    damagePerHit: hitPct > 0 ? expectedPerAttack / hitPct : 0,
+    damagePerRound: apr * expectedPerAttack,
   };
 }
 
@@ -78,28 +98,28 @@ function formatPctChange(value) {
 }
 
 function resolveChar(char, useCompare) {
-  if (!useCompare || !char.compareActive) {
-    return {
-      thac0: Number(char.thac0) || 0,
-      apr: Number(char.apr) || 0,
-      a: Number(char.a) || 0,
-      b: Number(char.b) || 1,
-      c: Number(char.c) || 0,
-      d: Number(char.d) || 0,
-      ac: Number(char.ac) || 0,
-      helmet: Boolean(char.helmet),
-    };
-  }
+  const base = {
+    thac0: Number(char.thac0) || 0,
+    apr: Number(char.apr) || 0,
+    a: Number(char.a) || 0,
+    b: Number(char.b) || 1,
+    c: Number(char.c) || 0,
+    d: Number(char.d) || 0,
+    ac: Number(char.ac) || 0,
+    helmet: Boolean(char.helmet),
+  };
+  if (!useCompare || !char.compareActive) return base;
+
   const cmp = char.compare;
   return {
-    thac0: cmp.thac0 !== '' ? Number(cmp.thac0) : Number(char.thac0) || 0,
-    apr: cmp.apr !== '' ? Number(cmp.apr) : Number(char.apr) || 0,
-    a: cmp.a !== '' ? Number(cmp.a) : Number(char.a) || 0,
-    b: cmp.b !== '' ? Number(cmp.b) : Number(char.b) || 1,
-    c: cmp.c !== '' ? Number(cmp.c) : Number(char.c) || 0,
-    d: cmp.d !== '' ? Number(cmp.d) : Number(char.d) || 0,
-    ac: cmp.ac !== '' ? Number(cmp.ac) : Number(char.ac) || 0,
-    helmet: cmp.helmet !== null ? cmp.helmet : Boolean(char.helmet),
+    thac0: compareFieldDiffers(base.thac0, cmp.thac0) ? Number(cmp.thac0) : base.thac0,
+    apr: compareFieldDiffers(base.apr, cmp.apr) ? Number(cmp.apr) : base.apr,
+    a: compareFieldDiffers(base.a, cmp.a) ? Number(cmp.a) : base.a,
+    b: compareFieldDiffers(base.b, cmp.b) ? Number(cmp.b) : base.b,
+    c: compareFieldDiffers(base.c, cmp.c) ? Number(cmp.c) : base.c,
+    d: compareFieldDiffers(base.d, cmp.d) ? Number(cmp.d) : base.d,
+    ac: compareFieldDiffers(base.ac, cmp.ac) ? Number(cmp.ac) : base.ac,
+    helmet: (cmp.helmet !== null && cmp.helmet !== base.helmet) ? cmp.helmet : base.helmet,
   };
 }
 
@@ -187,6 +207,7 @@ function computeBattle(charsA, charsB, useCompare = false) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     hitProbability,
+    expectedDamagePerAttack,
     damagePerRound,
     computeBattle,
     pctChange,

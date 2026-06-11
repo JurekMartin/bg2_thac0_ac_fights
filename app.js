@@ -122,9 +122,18 @@ function renderTeam(teamKey, members) {
   addBtn.disabled = members.length >= MAX_MEMBERS;
 }
 
-function buildResultsHtml(char, isTop, stats, cmpStats, compareActive) {
-  const hasCmp = hasCompareOverride(char);
+function compareOffenseDiffers(stats, cmpStats) {
+  return (
+    cmpStats.offense.hitProbability !== stats.offense.hitProbability ||
+    cmpStats.offense.damagePerRound !== stats.offense.damagePerRound
+  );
+}
 
+function compareDefenseDiffers(stats, cmpStats) {
+  return cmpStats.defenseTaken !== stats.defenseTaken;
+}
+
+function buildResultsHtml(char, isTop, stats, cmpStats, compareActive) {
   const offenseHtml = `
     <div class="result-line">
       <span class="label">Hit chance vs. enemy lead</span>
@@ -148,7 +157,7 @@ function buildResultsHtml(char, isTop, stats, cmpStats, compareActive) {
     : '';
 
   const compareOffenseHtml =
-    hasCmp && cmpStats
+    compareActive && cmpStats && compareOffenseDiffers(stats, cmpStats)
       ? `<div class="compare-line">
           <div class="result-line">
             <span class="label">→ Hit chance (comparison)</span>
@@ -166,7 +175,7 @@ function buildResultsHtml(char, isTop, stats, cmpStats, compareActive) {
       : '';
 
   const teamShareCompareHtml =
-    compareActive && cmpStats
+    compareActive && cmpStats && cmpStats.damageContribution !== stats.damageContribution
       ? `<div class="compare-line">
           <div class="result-line">
             <span class="label">→ Team damage share (comparison)</span>
@@ -178,7 +187,7 @@ function buildResultsHtml(char, isTop, stats, cmpStats, compareActive) {
       : '';
 
   const compareDefenseHtml =
-    isTop && hasCmp && cmpStats && cmpStats.defenseTaken !== null
+    compareActive && isTop && cmpStats && cmpStats.defenseTaken !== null && compareDefenseDiffers(stats, cmpStats)
       ? `<div class="compare-line">
           <div class="result-line">
             <span class="label">→ Damage taken (comparison)</span>
@@ -210,8 +219,8 @@ function renderCharacterCard(teamKey, char, index, base, compare) {
   const helmetField = isTop
     ? `<label class="checkbox-field helmet-row">
         <input type="checkbox" data-team="${teamKey}" data-id="${char.id}" data-field="helmet" ${char.helmet ? 'checked' : ''}>
-        Helmet
-      </label>`
+          Helmet (when defending)
+        </label>`
     : '';
 
   const compareAcField = isTop
@@ -406,6 +415,15 @@ function removeCharacter(teamKey, id) {
   render();
 }
 
+function syncCompareFieldFromBase(char, field) {
+  if (!char.compareActive) return;
+  if (field === 'helmet') {
+    char.compare.helmet = char.helmet;
+    return;
+  }
+  if (field in char.compare) char.compare[field] = char[field];
+}
+
 function updateField(teamKey, id, field, value) {
   const char = findCharacter(teamKey, id);
   if (!char) return;
@@ -414,12 +432,14 @@ function updateField(teamKey, id, field, value) {
     return;
   }
   if (field === 'helmet') {
-    char.helmet = value;
-    updateResults();
+    char.helmet = value === true;
+    syncCompareFieldFromBase(char, 'helmet');
+    render();
     return;
   }
   const num = value === '' ? 0 : Number(value);
   char[field] = Number.isNaN(num) ? char[field] : num;
+  syncCompareFieldFromBase(char, field);
   updateResults();
 }
 
@@ -427,7 +447,8 @@ function updateCompare(teamKey, id, field, value) {
   const char = findCharacter(teamKey, id);
   if (!char) return;
   char.compare[field] = value;
-  updateResults();
+  if (field === 'helmet') render();
+  else updateResults();
 }
 
 function toggleCompare(teamKey, id, active) {
@@ -541,7 +562,7 @@ document.addEventListener('input', (e) => {
     return;
   }
 
-  if (target.matches('[data-field]:not([data-field="name"])')) {
+  if (target.matches('[data-field]:not([data-field="name"]):not([type="checkbox"])')) {
     updateField(target.dataset.team, target.dataset.id, target.dataset.field, target.value);
     return;
   }
